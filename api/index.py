@@ -108,7 +108,7 @@ class handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         query = parse_qs(urlparse(self.path).query)
-        names = query.get('name', [])
+        names = query.get("name", [])
 
         marks = []
         for name in names:
@@ -118,37 +118,48 @@ class handler(BaseHTTPRequestHandler):
                     break
 
         self.send_response(200)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
+
         response = {"marks": marks}
-        self.wfile.write(json.dumps(response).encode('utf-8'))
+        self.wfile.write(json.dumps(response).encode("utf-8"))
 
     def do_POST(self):
-        content_length = int(self.headers['Content-Length'])
+        content_length = int(self.headers["Content-Length"])
         post_data = self.rfile.read(content_length)
-        data = json.loads(post_data)
 
-        updated_students = []
-        for new_entry in data.get("students", []):
-            name = new_entry.get("name")
-            marks = new_entry.get("marks")
+        try:
+            received_data = json.loads(post_data)
+            name = received_data.get("name")
+            marks = received_data.get("marks")
 
-            if name and isinstance(marks, int):
-                for student in self.student_marks:
-                    if student["name"] == name:
-                        student["marks"] = marks  # Update existing student
-                        break
-                else:
-                    self.student_marks.append(
-                        {"name": name, "marks": marks})  # Add new student
+            if not name or marks is None:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(json.dumps(
+                    {"error": "Invalid JSON data"}).encode("utf-8"))
+                return
 
-                updated_students.append({"name": name, "marks": marks})
+            # Check if student exists and update marks
+            for student in self.student_marks:
+                if student["name"] == name:
+                    student["marks"] = marks
+                    break
+            else:
+                self.student_marks.append({"name": name, "marks": marks})
 
-        self.send_response(200)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.end_headers()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
 
-        response = {"updated": updated_students}
-        self.wfile.write(json.dumps(response).encode('utf-8'))
+            response = {"message": "Student marks updated successfully",
+                        "updated_student": {"name": name, "marks": marks}}
+            self.wfile.write(json.dumps(response).encode("utf-8"))
+
+        except json.JSONDecodeError:
+            self.send_response(400)
+            self.end_headers()
+            self.wfile.write(json.dumps(
+                {"error": "Invalid JSON format"}).encode("utf-8"))
